@@ -1,0 +1,23 @@
+{
+  "variables": {
+    "aws_access_key": "{{env `AWS_ACCESS_KEY_ID`}}",
+    "aws_secret_key": "{{env `AWS_SECRET_ACCESS_KEY`}}",
+    "region":  ""
+  },
+  "provisioners": [
+  {
+    "type": "ansible",
+    "playbook_file": "./setup.yml"
+  }
+  ],
+  "builders": [{
+    "type": "amazon-ebs",
+    "access_key": "{{user `aws_access_key`}}",
+    "secret_key": "{{user `aws_secret_key`}}",
+    "region": "us-east-1",
+    "source_ami": "ami-c998b6b2",
+    "instance_type": "t2.micro",
+    "ssh_username": "ec2-user",
+    "ami_name": "packer-example-rhel74-{{isotime | clean_ami_name}}"
+  }]
+}

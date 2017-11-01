@@ -1,0 +1,59 @@
+---
+- name: Playbook to setup base config before installing Insights
+  hosts: all
+  become: yes
+  vars_files:
+    - rhsm_vars.yml
+    
+  tasks:
+    - name: Register system with rhsm activation key if defined
+      redhat_subscription:
+        state: present
+        activationkey: "{{rhsm_activation_key}}"
+        org_id: "{{rhsm_org}}"
+      when: rhsm_activation_key
+
+    - name: Register system with rhsm username and password if key is not defined
+      redhat_subscription:
+        state: present
+        pool: "{{rhsm_pool_id}}"
+        username: "{{rhsm_username}}"
+        password: "{{rhsm_password}}"
+      when: not rhsm_activation_key
+
+    - name: Register with Red Hat Insights
+      include_role:
+        name: redhataccess.redhat-access-insights-client
+      when: ansible_os_family == 'RedHat'
+
+    - name: Set insights registration ID to variable
+      command: cat /etc/redhat-access-insights/machine-id
+      register: insights_system_id
+
+    - name: Check to see if system has any reports returned
+      uri:
+        url: "https://access.redhat.com/r/insights/v2/systems/{{insights_system_id.stdout}}"
+        user: "{{rhsm_username}}"
+        password: "{{rhsm_password}}"
+        force_basic_auth: yes
+        return_content: yes
+      register: get_report
+
+    - name: Having 1 or more current reports from Insights should stop the build process
+      fail:
+        msg: "It appears that the current build has {{get_report.json.report_count}} pending issue(s) with Red Hat Insights. Please resolve these issues before continuing with the build process"
+      when: get_report.json.report_count != "0"
+
+    - name: Cleanup Red Hat Insights registration
+      command: redhat-access-insights --unregister
+
+    - name: Remove Insights directory
+      file:
+        state: absent
+        path: /etc/redhat-access-insights/
+
+    - name: Cleanup RHSM registrations
+      command: subscription-manager unregister
+
+    - name: Cleanup local RHSM
+      command: subscription-manager clean
