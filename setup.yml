@@ -2,9 +2,10 @@
 - name: Playbook to setup base config before installing Insights
   hosts: all
   become: yes
+  force_handlers: True
   vars_files:
     - rhsm_vars.yml
-    
+
   tasks:
     - name: Register system with rhsm activation key if defined
       redhat_subscription:
@@ -38,22 +39,31 @@
         force_basic_auth: yes
         return_content: yes
       register: get_report
+      changed_when: True
+      notify: "cleanup"
 
     - name: Having 1 or more current reports from Insights should stop the build process
       fail:
         msg: "It appears that the current build has {{get_report.json.report_count}} pending issue(s) with Red Hat Insights. Please resolve these issues before continuing with the build process"
       when: get_report.json.report_count != "0"
 
+
+
+  handlers:
     - name: Cleanup Red Hat Insights registration
       command: redhat-access-insights --unregister
+      listen: "cleanup"
 
-    - name: Remove Insights directory
-      file:
+    - name: Uninstall Red Hat Insights
+      yum:
         state: absent
-        path: /etc/redhat-access-insights/
+        name: redhat-access-insights-client
+      listen: "cleanup"
 
     - name: Cleanup RHSM registrations
       command: subscription-manager unregister
+      listen: "cleanup"
 
     - name: Cleanup local RHSM
       command: subscription-manager clean
+      listen: "cleanup"
